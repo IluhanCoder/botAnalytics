@@ -17,8 +17,15 @@ export class AnalysisService {
     env.cacheDir = "./models";
   }
 
-  // Lazy load models only when needed to save memory
+  // Load and unload models sequentially to save memory
   private async getNerModel() {
+    // Unload classifier if loaded
+    if (this.classifierModel) {
+      console.log('🗑️ Unloading Classifier to free memory...');
+      this.classifierModel = null;
+      if (global.gc) global.gc(); // Force garbage collection if available
+    }
+    
     if (!this.nerModel) {
       console.log('🔄 Loading NER model...');
       this.nerModel = await pipeline("token-classification", "Xenova/bert-base-NER");
@@ -28,6 +35,13 @@ export class AnalysisService {
   }
 
   private async getClassifierModel() {
+    // Unload NER if loaded
+    if (this.nerModel) {
+      console.log('🗑️ Unloading NER to free memory...');
+      this.nerModel = null;
+      if (global.gc) global.gc(); // Force garbage collection if available
+    }
+    
     if (!this.classifierModel) {
       console.log('🔄 Loading Classifier model...');
       this.classifierModel = await pipeline("zero-shot-classification", "Xenova/bart-large-mnli");
