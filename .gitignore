@@ -1,0 +1,7 @@
+node_modules/
+server/models/
+client/.env
+server/.env
+client/build/
+*.log
+.DS_Store
