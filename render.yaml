@@ -9,8 +9,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: MONGODB_URI
+      - key: DB_URI
         sync: false
+      - key: CLIENT_URL
+        value: https://botanalytics-client.onrender.com
       - key: JWT_SECRET
         generateValue: true
       - key: PORT

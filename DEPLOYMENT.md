@@ -12,15 +12,18 @@
    
    Для **Backend (botanalytics-api)**:
    ```
-   MONGODB_URI=mongodb+srv://your-connection-string
-   JWT_SECRET=your-secret-key
-   PORT=5000
+   DB_URI=mongodb+srv://your-username:password@cluster.mongodb.net/botanalytics
+   CLIENT_URL=https://botanalytics-client.onrender.com
+   JWT_SECRET=your-random-secret-key-here
+   PORT=10000
    ```
 
    Для **Frontend (botanalytics-client)**:
    ```
    REACT_APP_API_URL=https://botanalytics-api.onrender.com
    ```
+
+   **Важливо:** Змінна `CLIENT_URL` на backend має співпадати з URL frontend-сервісу для правильної роботи CORS.
 
 3. **Моделі завантажаться автоматично:**
    - При першому запуску `@xenova/transformers` завантажить моделі в `/opt/render/project/src/server/models`

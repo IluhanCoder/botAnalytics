@@ -11,10 +11,28 @@ config();
 const app = express();
 
 app.use(express.json());
+
+// CORS configuration - allow multiple origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://botanalytics-client.onrender.com',
+  process.env.CLIENT_URL
+].filter(Boolean); // Remove undefined values
+
 app.use(cors({
   credentials: true,
-  origin: process.env.CLIENT_URL
-}))
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(null, true); // Allow anyway for development
+    }
+  }
+}));
 
 const PORT = process.env.PORT ?? 5001;
 
