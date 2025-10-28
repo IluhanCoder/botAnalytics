@@ -16,7 +16,10 @@
    CLIENT_URL=https://botanalytics-client.onrender.com
    JWT_SECRET=your-random-secret-key-here
    PORT=10000
+   LOW_MEMORY_MODE=true
    ```
+
+   **LOW_MEMORY_MODE=true** вимикає важкі ML-моделі (BERT NER, BART Classification) для економії пам'яті на free tier. Залишаються тільки легкі: sentiment, keywords, topics.
 
    Для **Frontend (botanalytics-client)**:
    ```

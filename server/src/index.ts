@@ -17,22 +17,27 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://botanalytics-client.onrender.com',
   process.env.CLIENT_URL
-].filter(Boolean); // Remove undefined values
+].filter(Boolean);
 
 app.use(cors({
-  credentials: true,
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, etc.)
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin}`);
-      callback(null, true); // Allow anyway for development
+      console.warn(`⚠️ CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
     }
-  }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// Additional CORS headers for preflight
+app.options('*', cors());
 
 const PORT = process.env.PORT ?? 5001;
 

@@ -17,6 +17,8 @@ services:
         generateValue: true
       - key: PORT
         value: 10000
+      - key: LOW_MEMORY_MODE
+        value: true
 
   # Frontend (Static Site)
   - type: web

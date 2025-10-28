@@ -8,11 +8,33 @@ import { pipeline, env } from "@xenova/transformers";
 import mlConfigService from "../ml-config/ml-config-service";
 
 export class AnalysisService {
+  private nerModel: any = null;
+  private classifierModel: any = null;
+
   constructor() {
     env.allowLocalModels = true;
     env.allowRemoteModels = true;
     env.cacheDir = "./models";
-  }т
+  }
+
+  // Lazy load models only when needed to save memory
+  private async getNerModel() {
+    if (!this.nerModel) {
+      console.log('🔄 Loading NER model...');
+      this.nerModel = await pipeline("token-classification", "Xenova/bert-base-NER");
+      console.log('✅ NER model loaded');
+    }
+    return this.nerModel;
+  }
+
+  private async getClassifierModel() {
+    if (!this.classifierModel) {
+      console.log('🔄 Loading Classifier model...');
+      this.classifierModel = await pipeline("zero-shot-classification", "Xenova/bart-large-mnli");
+      console.log('✅ Classifier model loaded');
+    }
+    return this.classifierModel;
+  }
 
   // Detect if text is Ukrainian (simple heuristic)
   private isUkrainian(text: string): boolean {
@@ -80,15 +102,6 @@ export class AnalysisService {
       category: `${category} (демо)`,
     };
   }
-
-  // 🧠 Named Entity Recognition (NER)
-  private nerPromise = pipeline("token-classification", "Xenova/bert-base-NER");
-
-  // 🏷 Zero-shot classification
-  private classifierPromise = pipeline(
-    "zero-shot-classification",
-    "Xenova/bart-large-mnli"
-  );
 
   // 😊 Sentiment analysis
   private sentimentAnalyzer = new Sentiment();
@@ -163,7 +176,7 @@ export class AnalysisService {
   private async extractEntities(text: string) {
     try {
       if (!text || text.trim().length === 0) return [];
-      const ner = await this.nerPromise;
+      const ner = await this.getNerModel();
       const result = await ner(text);
       return this.formatEntities(result);
     } catch (error) {
@@ -177,7 +190,7 @@ export class AnalysisService {
     try {
       if (!text || text.trim().length === 0) return "Unknown";
       if (!labels || labels.length === 0) return "Unknown";
-      const classifier = await this.classifierPromise;
+      const classifier = await this.getClassifierModel();
       const result: any = await classifier(text, labels);
       return result.labels[0];
     } catch (error) {
@@ -226,6 +239,9 @@ export class AnalysisService {
       // English text - use real ML models
       console.log('English text detected - using ML models');
       const config = await mlConfigService.getConfig();
+      
+      // For free tier with low memory - use lightweight mode
+      const isLowMemory = process.env.LOW_MEMORY_MODE === 'true' || process.env.NODE_ENV === 'production';
 
       const cleaned = preprocess(text);
       const tokens = this.tokenize(cleaned);
@@ -246,10 +262,15 @@ export class AnalysisService {
         topics = [];
       }
 
-      const entities = config.nerEnabled ? await this.extractEntities(text) : [];
+      // Only load heavy models if not in low memory mode AND enabled in config
+      const entities = (!isLowMemory && config.nerEnabled) ? await this.extractEntities(text) : [];
       const keywords = this.getKeywords(cleaned, config.keywordsCount);
       const keyPhrases = this.getKeyPhrases(text);
-      const category = config.classificationEnabled ? await this.classifyText(text, config.classificationLabels) : "Unknown";
+      const category = (!isLowMemory && config.classificationEnabled) ? await this.classifyText(text, config.classificationLabels) : "Unknown (low memory mode)";
+
+      if (isLowMemory) {
+        console.log('⚠️ LOW_MEMORY_MODE: Skipping heavy ML models (NER, Classification)');
+      }
 
       return {
         text,
