@@ -3,10 +3,9 @@ services:
   - type: web
     name: botanalytics-api
     env: node
-    region: frankfurt
     plan: free
     buildCommand: cd server && npm install
-    startCommand: cd server && npm run dev
+    startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
         value: production
@@ -15,18 +14,12 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: PORT
-        value: 5000
-    disk:
-      name: models-cache
-      mountPath: /opt/render/project/src/server/models
-      sizeGB: 2
+        value: 10000
 
   # Frontend (Static Site)
   - type: web
     name: botanalytics-client
     env: static
-    region: frankfurt
-    plan: free
     buildCommand: cd client && npm install && npm run build
     staticPublishPath: client/build
     envVars:
