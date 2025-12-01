@@ -4,11 +4,13 @@ services:
     name: botanalytics-api
     env: node
     plan: free
-    buildCommand: cd server && npm install
+    buildCommand: cd server && rm -rf node_modules package-lock.json && npm install --no-optional
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=460
       - key: DB_URI
         sync: false
       - key: CLIENT_URL
@@ -17,8 +19,6 @@ services:
         generateValue: true
       - key: PORT
         value: 10000
-      - key: LOW_MEMORY_MODE
-        value: true
 
   # Frontend (Static Site)
   - type: web
