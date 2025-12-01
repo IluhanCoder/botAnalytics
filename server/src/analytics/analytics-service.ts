@@ -4,50 +4,12 @@ import lda from "lda";
 import rake from "node-rake";
 import { preprocess } from "../utils/text-processing";
 import { AnalyticsResponse } from "./../../../shared/types/dataset-types";
-import { pipeline, env } from "@xenova/transformers";
+import { extractEntities } from "../utils/ner";
 import mlConfigService from "../ml-config/ml-config-service";
 
 export class AnalysisService {
-  private nerModel: any = null;
-  private classifierModel: any = null;
-
   constructor() {
-    env.allowLocalModels = true;
-    env.allowRemoteModels = true;
-    env.cacheDir = "./models";
-  }
-
-  // Load and unload models sequentially to save memory
-  private async getNerModel() {
-    // Unload classifier if loaded
-    if (this.classifierModel) {
-      console.log('🗑️ Unloading Classifier to free memory...');
-      this.classifierModel = null;
-      if (global.gc) global.gc(); // Force garbage collection if available
-    }
-    
-    if (!this.nerModel) {
-      console.log('🔄 Loading NER model...');
-      this.nerModel = await pipeline("token-classification", "Xenova/bert-base-NER");
-      console.log('✅ NER model loaded');
-    }
-    return this.nerModel;
-  }
-
-  private async getClassifierModel() {
-    // Unload NER if loaded
-    if (this.nerModel) {
-      console.log('🗑️ Unloading NER to free memory...');
-      this.nerModel = null;
-      if (global.gc) global.gc(); // Force garbage collection if available
-    }
-    
-    if (!this.classifierModel) {
-      console.log('🔄 Loading Classifier model...');
-      this.classifierModel = await pipeline("zero-shot-classification", "Xenova/bart-large-mnli");
-      console.log('✅ Classifier model loaded');
-    }
-    return this.classifierModel;
+    console.log('✅ AnalysisService initialized (lightweight mode)');
   }
 
   // Detect if text is Ukrainian (simple heuristic)
@@ -186,54 +148,77 @@ export class AnalysisService {
     }
   }
 
-  // NER wrapper
-  private async extractEntities(text: string) {
+  // NER wrapper using compromise (lightweight)
+  private extractEntitiesLight(text: string) {
     try {
       if (!text || text.trim().length === 0) return [];
-      const ner = await this.getNerModel();
-      const result = await ner(text);
-      return this.formatEntities(result);
+      const result = extractEntities(text);
+      
+      // Convert to format expected by frontend
+      const formatted = [];
+      if (result.persons) {
+        result.persons.forEach(person => {
+          formatted.push({ entity: 'PER', text: person });
+        });
+      }
+      if (result.organizations) {
+        result.organizations.forEach(org => {
+          formatted.push({ entity: 'ORG', text: org });
+        });
+      }
+      
+      return formatted;
     } catch (error) {
       console.error('NER error:', error);
       return [];
     }
   }
 
-  // Classification wrapper
-  private async classifyText(text: string, labels: string[]): Promise<string> {
+  // Classification using keyword matching (lightweight)
+  private classifyTextLight(text: string, labels: string[]): string {
     try {
-      if (!text || text.trim().length === 0) return "Unknown";
-      if (!labels || labels.length === 0) return "Unknown";
-      const classifier = await this.getClassifierModel();
-      const result: any = await classifier(text, labels);
-      return result.labels[0];
+      if (!text || text.trim().length === 0) return "General";
+      if (!labels || labels.length === 0) return "General";
+      
+      const lowerText = text.toLowerCase();
+      
+      // Category keyword mappings
+      const categoryKeywords: Record<string, string[]> = {
+        'Technology': ['tech', 'computer', 'software', 'hardware', 'ai', 'machine learning', 'programming', 'code', 'internet', 'digital', 'cyber', 'app', 'mobile', 'website'],
+        'Politics': ['politic', 'government', 'election', 'president', 'minister', 'parliament', 'law', 'policy', 'vote', 'democracy', 'republican', 'democrat'],
+        'Sports': ['sport', 'football', 'soccer', 'basketball', 'tennis', 'game', 'player', 'team', 'championship', 'olympic', 'athlete', 'coach'],
+        'Business': ['business', 'company', 'market', 'stock', 'finance', 'economy', 'trade', 'investment', 'profit', 'sales', 'corporate', 'startup'],
+        'Entertainment': ['entertainment', 'movie', 'film', 'music', 'celebrity', 'actor', 'singer', 'concert', 'show', 'series', 'netflix', 'hollywood'],
+        'Health': ['health', 'medical', 'doctor', 'hospital', 'disease', 'treatment', 'medicine', 'patient', 'therapy', 'clinic', 'vaccine'],
+        'Science': ['science', 'research', 'study', 'scientist', 'discovery', 'experiment', 'theory', 'laboratory', 'physics', 'chemistry', 'biology'],
+        'Education': ['education', 'school', 'university', 'student', 'teacher', 'learning', 'course', 'study', 'academic', 'college', 'professor']
+      };
+      
+      // Score each category
+      let bestCategory = 'General';
+      let bestScore = 0;
+      
+      for (const label of labels) {
+        const keywords = categoryKeywords[label] || [];
+        let score = 0;
+        
+        for (const keyword of keywords) {
+          if (lowerText.includes(keyword)) {
+            score += 1;
+          }
+        }
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestCategory = label;
+        }
+      }
+      
+      return bestCategory;
     } catch (error) {
       console.error('Classification error:', error);
-      return "Unknown";
+      return "General";
     }
-  }
-
-  private formatEntities(entities) {
-    const formatted = [];
-    let current = null;
-
-    for (const item of entities) {
-      const label = item.entity.replace(/^B-|^I-/, "") as string;
-      const word = item.word.replace(/^##/, "") as string;
-
-      if (item.entity.startsWith("B-")) {
-        if (current) formatted.push(current);
-        current = { entity: label, text: word };
-      } else if (item.entity.startsWith("I-") && current && current.entity === label) {
-        current.text += item.word.startsWith("##") ? word : " " + word;
-      } else {
-        if (current) formatted.push(current);
-        current = null;
-      }
-    }
-
-    if (current) formatted.push(current);
-    return formatted;
   }
 
   async analyze(text: string): Promise<AnalyticsResponse> {
@@ -250,12 +235,9 @@ export class AnalysisService {
         return this.generateDemoResults(text);
       }
 
-      // English text - use real ML models
-      console.log('English text detected - using ML models');
+      // English text - use lightweight algorithms
+      console.log('English text detected - using lightweight mode');
       const config = await mlConfigService.getConfig();
-      
-      // For free tier with low memory - use lightweight mode
-      const isLowMemory = process.env.LOW_MEMORY_MODE === 'true' || process.env.NODE_ENV === 'production';
 
       const cleaned = preprocess(text);
       const tokens = this.tokenize(cleaned);
@@ -276,15 +258,13 @@ export class AnalysisService {
         topics = [];
       }
 
-      // Only load heavy models if not in low memory mode AND enabled in config
-      const entities = (!isLowMemory && config.nerEnabled) ? await this.extractEntities(text) : [];
+      // Use lightweight algorithms instead of heavy ML models
+      const entities = config.nerEnabled ? this.extractEntitiesLight(text) : [];
       const keywords = this.getKeywords(cleaned, config.keywordsCount);
       const keyPhrases = this.getKeyPhrases(text);
-      const category = (!isLowMemory && config.classificationEnabled) ? await this.classifyText(text, config.classificationLabels) : "Unknown (low memory mode)";
+      const category = config.classificationEnabled ? this.classifyTextLight(text, config.classificationLabels) : "General";
 
-      if (isLowMemory) {
-        console.log('⚠️ LOW_MEMORY_MODE: Skipping heavy ML models (NER, Classification)');
-      }
+      console.log('✅ Analysis completed with lightweight algorithms');
 
       return {
         text,

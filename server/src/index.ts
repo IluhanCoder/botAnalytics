@@ -36,8 +36,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Additional CORS headers for preflight
-app.options('*', cors());
+// Additional CORS headers for preflight - removed problematic * route
+// app.options('*', cors());
 
 const PORT = process.env.PORT ?? 5001;
 
